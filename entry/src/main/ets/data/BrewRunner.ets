@@ -134,3 +134,50 @@ export function parseInfoJson(json: string): LivePkg[] {
   out.sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
   return out;
 }
+
+// ---- brew doctor --json 解析 ----
+export interface DoctorFinding {
+  tier: number;
+  text: string;
+  affects: string[];
+}
+export interface DoctorResult {
+  tier: number;
+  findings: DoctorFinding[];
+}
+interface DoctorFindingRaw { tier?: number; text?: string; affects?: string[]; }
+interface DoctorJson { tier?: number; findings?: DoctorFindingRaw[]; }
+
+export function parseDoctorJson(json: string): DoctorResult {
+  const empty: DoctorResult = { tier: 0, findings: [] };
+  if (json.length === 0) return empty;
+  try {
+    const d = JSON.parse(json) as DoctorJson;
+    const findings: DoctorFinding[] = [];
+    for (const f of (d.findings ?? [])) {
+      findings.push({
+        tier: Number(f.tier ?? 0),
+        text: f.text ?? '',
+        affects: f.affects ?? [],
+      });
+    }
+    return { tier: Number(d.tier ?? 0), findings: findings };
+  } catch (e) {
+    hilog.error(0x0000, TAG, 'parseDoctorJson failed');
+    return empty;
+  }
+}
+
+// ---- brew config 解析（纯文本 Key: Value）----
+export interface ConfigItem { key: string; value: string; }
+export function parseConfig(text: string): ConfigItem[] {
+  const out: ConfigItem[] = [];
+  for (const line of text.split('\n')) {
+    const eq = line.indexOf(':');
+    if (eq <= 0) continue;
+    const key = line.substring(0, eq).trim();
+    const value = line.substring(eq + 1).trim();
+    if (key.length > 0 && value.length > 0) out.push({ key: key, value: value });
+  }
+  return out;
+}

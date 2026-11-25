@@ -1,5 +1,6 @@
-// 其余页面：Services / Doctor / Configuration（第一阶段占位 + 静态数据）
+// 其余页面：Services / Doctor / Configuration
 import { C, L, F } from '../theme/Tokens';
+import { DoctorResult, DoctorFinding, ConfigItem } from '../data/BrewRunner';
 
 // ============ Services 页 ============
 interface SvcItem { name: string; status: string; running: boolean; user: string; }
@@ -51,16 +52,15 @@ export struct ServicesPage {
   }
 }
 
-// ============ Doctor 页 ============
-interface Finding { tier: string; title: string; detail: string; }
-const FINDINGS: Finding[] = [
-  { tier: 'warning', title: 'Warning: broken symlinks', detail: 'Some formulae have broken symlinks in the Cellar.' },
-  { tier: 'info', title: 'Info: auto-update', detail: 'Homebrew auto-update is enabled.' },
-  { tier: 'success', title: 'No specific problems detected', detail: 'Your Homebrew installation looks healthy.' },
-];
+// ============ Doctor 页（实时 brew doctor --json）============
+function tierIcon(t: number): string { return t >= 2 ? '✕' : (t === 1 ? '⚠' : '✓'); }
+function tierColor(t: number): string { return t >= 2 ? C.statusError : (t === 1 ? C.statusWarning : C.statusSuccess); }
 
 @Component
 export struct DoctorPage {
+  @Prop result: DoctorResult = { tier: 0, findings: [] };
+  @Prop loaded: boolean = false;
+
   build() {
     Column({ space: 0 }) {
       Column({ space: 4 }) {
@@ -70,42 +70,41 @@ export struct DoctorPage {
        .backgroundColor(C.surface).border({ width: { bottom: 1 }, color: C.borderSeparator })
       Scroll() {
         Column({ space: L.sm }) {
-          ForEach(FINDINGS, (f: Finding) => {
+          if (!this.loaded) {
+            Text('Running brew doctor…').fontSize(F.callout).fontColor(C.textTertiary).padding(L.md)
+          } else if (this.result.findings.length === 0) {
             Row({ space: L.sm }) {
-              Text(f.tier === 'success' ? '✓' : (f.tier === 'warning' ? '⚠' : 'ⓘ'))
-                .fontSize(16).fontColor(f.tier === 'success' ? C.statusSuccess : (f.tier === 'warning' ? C.statusWarning : C.statusInfo))
-              Column({ space: 3 }) {
-                Text(f.title).fontSize(F.body).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
-                Text(f.detail).fontSize(F.callout).fontColor(C.textSecondary)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Text('✓').fontSize(16).fontColor(C.statusSuccess)
+              Text('No specific problems detected').fontSize(F.body).fontColor(C.textPrimary)
             }.width('100%').padding(L.md).borderRadius(L.radiusMd).backgroundColor(C.surface)
-          })
-          Row({ space: L.sm }) {
-            Text('ⓘ').fontSize(12).fontColor(C.textTertiary)
-            Text('Full diagnostics require running brew doctor (native bridge integration pending).')
-              .fontSize(F.caption).fontColor(C.textTertiary)
-          }.padding(L.md)
+          } else {
+            ForEach(this.result.findings, (f: DoctorFinding) => {
+              Row({ space: L.sm }) {
+                Text(tierIcon(f.tier)).fontSize(16).fontColor(tierColor(f.tier))
+                Column({ space: 3 }) {
+                  ForEach(f.text.split('\n').filter((ln: string): boolean => ln.trim().length > 0), (ln: string) => {
+                    Text(ln).fontSize(F.callout).fontColor(ln.length > 0 && ln.charAt(0) === '#' ? C.textPrimary : C.textSecondary)
+                      .width('100%')
+                  })
+                  if (f.affects.length > 0) {
+                    Text('Affects: ' + f.affects.join(', ')).fontSize(F.caption2).fontColor(C.textTertiary)
+                  }
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              }.width('100%').padding(L.md).borderRadius(L.radiusMd).backgroundColor(C.surface)
+            })
+          }
         }.width('100%').padding({ left: L.xl, right: L.xl, top: L.lg, bottom: L.lg })
       }.layoutWeight(1).height('100%').backgroundColor(C.surfaceElevated)
     }.width('100%').height('100%').backgroundColor(C.surfaceElevated)
   }
 }
 
-// ============ Configuration 页 ============
-interface ConfigItem { key: string; value: string; }
-const CONFIG: ConfigItem[] = [
-  { key: 'HOMEBREW_VERSION', value: '7.0.9_7' },
-  { key: 'ORIGIN', value: 'https://atomgit.com/Harmonybrew/brew.git' },
-  { key: 'Branch', value: 'main' },
-  { key: 'HOMEBREW_PREFIX', value: '/storage/Users/currentUser/.harmonybrew' },
-  { key: 'HOMEBREW_CELLAR', value: '/storage/Users/currentUser/.harmonybrew/Cellar' },
-  { key: 'Ruby', value: '4.0.10' },
-  { key: 'OS', value: 'HarmonyOS (aarch64-linux-ohos)' },
-  { key: 'Core tap', value: 'harmonybrew/homebrew-core' },
-];
-
+// ============ Configuration 页（实时 brew config）============
 @Component
 export struct ConfigurationPage {
+  @Prop config: ConfigItem[] = [];
+  @Prop loaded: boolean = false;
+
   build() {
     Column({ space: 0 }) {
       Column({ space: 4 }) {
@@ -117,18 +116,17 @@ export struct ConfigurationPage {
         Column({ space: L.sm }) {
           Text('brew config').fontSize(F.title2).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
             .margin({ top: L.md, bottom: L.sm })
-          ForEach(CONFIG, (c: ConfigItem) => {
-            Row({ space: L.md }) {
-              Text(c.key).fontSize(F.callout).fontColor(C.textSecondary).width(200)
-              Text(c.value).fontSize(F.callout).fontColor(C.textPrimary).fontFamily('monospace').layoutWeight(1)
-            }.width('100%').padding({ left: L.md, right: L.md, top: 6, bottom: 6 })
-             .borderRadius(L.radiusSm).backgroundColor(C.surface)
-          })
-          Row({ space: L.sm }) {
-            Text('ⓘ').fontSize(12).fontColor(C.textTertiary)
-            Text('Configuration is read from brew.env files; live values require native bridge integration.')
-              .fontSize(F.caption).fontColor(C.textTertiary)
-          }.margin({ top: L.lg })
+          if (!this.loaded) {
+            Text('Reading brew config…').fontSize(F.callout).fontColor(C.textTertiary)
+          } else {
+            ForEach(this.config, (c: ConfigItem) => {
+              Row({ space: L.md }) {
+                Text(c.key).fontSize(F.callout).fontColor(C.textSecondary).width(200)
+                Text(c.value).fontSize(F.callout).fontColor(C.textPrimary).fontFamily('monospace').layoutWeight(1)
+              }.width('100%').padding({ left: L.md, right: L.md, top: 6, bottom: 6 })
+               .borderRadius(L.radiusSm).backgroundColor(C.surface)
+            })
+          }
         }.width('100%').padding({ left: L.xl, right: L.xl, top: L.sm, bottom: L.lg })
       }.layoutWeight(1).height('100%').backgroundColor(C.surfaceElevated)
     }.width('100%').height('100%').backgroundColor(C.surfaceElevated)

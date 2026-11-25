@@ -2,7 +2,11 @@ import { C } from '../theme/Tokens';
 import { Sidebar, ConsolePanel, Page } from '../components/Shell';
 import { InstalledPage, UpgradesPage, DiscoverPage } from '../components/PackagePages';
 import { ServicesPage, DoctorPage, ConfigurationPage } from '../components/OtherPages';
-import { start, isRunning, output, parseInfoJson, LivePkg } from '../data/BrewRunner';
+import {
+  start, isRunning, output, parseInfoJson, parseDoctorJson, parseConfig,
+  LivePkg, DoctorResult, ConfigItem,
+} from '../data/BrewRunner';
+import hilog from '@ohos.hilog';
 
 @Entry
 @Component
@@ -10,22 +14,39 @@ struct Index {
   @State current: Page = Page.Installed;
   @State packages: LivePkg[] = [];
   @State loaded: boolean = false;
-  @State consoleText: string = '$ brew info --installed --json=v2\n→ 正在读取…';
+  @State doctor: DoctorResult = { tier: 0, findings: [] };
+  @State doctorLoaded: boolean = false;
+  @State config: ConfigItem[] = [];
+  @State configLoaded: boolean = false;
+  @State consoleText: string = '$ brew …\n→ 正在读取实时数据…';
+
+  // 启动一个 job 并轮询，完成后执行回调
+  private runJob(args: string[], id: string, done: (out: string) => void): void {
+    start(args, id);
+    const timer = setInterval(() => {
+      if (isRunning(id)) return;
+      clearInterval(timer);
+      done(output(id));
+    }, 500);
+  }
 
   aboutToAppear(): void {
-    // P1：在 HAP 内执行 brew info --installed --json=v2，读回并解析成实时包列表
-    start(['info', '--installed', '--json=v2'], 'info-all');
-    const timer = setInterval(() => {
-      if (isRunning('info-all')) return;
-      clearInterval(timer);
-      const out = output('info-all');
+    // 三个只读 brew 命令并行执行（HAP 内通过 native 桥）
+    this.runJob(['info', '--installed', '--json=v2'], 'info-all', (out: string) => {
       const pkgs = parseInfoJson(out);
-      if (pkgs.length > 0) {
-        this.packages = pkgs;
-        this.loaded = true;
-      }
+      if (pkgs.length > 0) { this.packages = pkgs; this.loaded = true; }
       this.consoleText = '$ brew info --installed --json=v2\n→ ' + pkgs.length + ' formulae loaded';
-    }, 500);
+    });
+    this.runJob(['doctor', '--json'], 'doctor', (out: string) => {
+      const d = parseDoctorJson(out);
+      hilog.info(0, 'CellarLive', 'doctor: bytes=%{public}d findings=%{public}d', out.length, d.findings.length);
+      if (out.length > 0) { this.doctor = d; this.doctorLoaded = true; }
+    });
+    this.runJob(['config'], 'config', (out: string) => {
+      const c = parseConfig(out);
+      hilog.info(0, 'CellarLive', 'config: bytes=%{public}d items=%{public}d', out.length, c.length);
+      if (c.length > 0) { this.config = c; this.configLoaded = true; }
+    });
   }
 
   private upgradeCount(): number {
@@ -50,9 +71,9 @@ struct Index {
             } else if (this.current === Page.Services) {
               ServicesPage()
             } else if (this.current === Page.Doctor) {
-              DoctorPage()
+              DoctorPage({ result: this.doctor, loaded: this.doctorLoaded })
             } else if (this.current === Page.Configuration) {
-              ConfigurationPage()
+              ConfigurationPage({ config: this.config, loaded: this.configLoaded })
             }
           }
           .width('100%').layoutWeight(1)
