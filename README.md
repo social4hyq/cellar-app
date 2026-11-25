@@ -20,9 +20,14 @@
 3. 干净 env 注入 HOME/PATH/TMPDIR/HOMEBREW_TEMP，关闭 auto-update/color/analytics
 4. 输出重定向到沙箱日志，UI 异步轮询 pidfile + 读回解析
 
+已接实时数据的页面：
+- ✅ Installed / Upgrades / Discover（brew info --installed --json=v2，280 formulae）
+- ✅ Doctor（brew doctor --json，6 findings）
+- ✅ Configuration（brew config，31 items）
+
 未实现（后续阶段）：
+- **Services 页**：Harmonybrew 的 `brew services` 无真实实现（依赖 macOS launchctl / Linux systemctl，鸿蒙都没有），需改接 Harbor IPC 拿真实服务状态
 - brew 写命令（install/uninstall/upgrade）——需 native job 生命周期层（stdin/退出码/进程组取消）
-- 服务启停控制、Doctor 实时诊断、配置页实时读取（当前 Services/Doctor/Configuration 仍是静态占位）
 - Console streaming 输出
 
 ## 构建与安装
