@@ -84,6 +84,58 @@ export function output(jobId: string): string {
   return '';
 }
 
+// ---- 写命令（install/uninstall/upgrade）：长任务 + 退出码 + 取消 ----
+function exitFile(jobId: string): string { return CACHE + '/' + jobId + '.exit'; }
+
+// 启动写命令：用 shell 包装，brew 结束后把退出码写入 .exit 文件；stdin 接 /dev/null 避免交互卡死。
+// 非交互 flags：--quiet 减少输出；HOMEBREW_NO_* 关分析/颜色/自动更新。
+export function startWrite(args: string[], jobId: string): boolean {
+  ensureDir();
+  const p = paths(jobId);
+  const ef = exitFile(jobId);
+  try { if (fileIo.accessSync(p.log)) fileIo.unlinkSync(p.log); } catch (e) {}
+  try { if (fileIo.accessSync(p.pidfile)) fileIo.unlinkSync(p.pidfile); } catch (e) {}
+  try { if (fileIo.accessSync(ef)) fileIo.unlinkSync(ef); } catch (e) {}
+
+  // 拼 shell 命令：cd home && brew <args> < /dev/null; echo $? > exitfile
+  const quoted = args.map((a) => shellQuote(a)).join(' ');
+  const cmd: string = 'cd /storage/Users/currentUser; ' + BREW + ' ' + quoted +
+    ' < /dev/null; echo $? > ' + shellQuote(ef);
+  const fullArgs: string[] = ['--no-rcs', '--no-global-rcs', '-c', cmd];
+  const argsJson: string = JSON.stringify(fullArgs) as string;
+  const envJson: string = JSON.stringify(brewEnv()) as string;
+  try {
+    const r: number = cellarBridge.spawn(ZSH, argsJson, p.log, p.pidfile, envJson);
+    hilog.info(0x0000, TAG, 'startWrite %{public}s -> %{public}d', jobId, r);
+    return true;
+  } catch (e) {
+    hilog.error(0x0000, TAG, 'startWrite %{public}s failed', jobId);
+    return false;
+  }
+}
+
+// 读退出码：文件存在返回整数，不存在返回 -1（未完成/未启动）
+export function exitCode(jobId: string): number {
+  const ef = exitFile(jobId);
+  try {
+    if (fileIo.accessSync(ef)) {
+      const t = fileIo.readTextSync(ef).trim();
+      const n = parseInt(t, 10);
+      return isNaN(n) ? -2 : n;
+    }
+  } catch (e) {}
+  return -1;
+}
+
+// 取消任务：杀整个进程组（SIGTERM→SIGKILL 兜底）
+export function cancel(jobId: string): void {
+  const pid: number = cellarBridge.pidFromPidfile(paths(jobId).pidfile);
+  if (pid > 1) {
+    cellarBridge.killGroup(pid, 15);
+    cellarBridge.killGroup(pid, 9);
+  }
+}
+
 // ---- brew info --json=v2 解析（最小字段）----
 interface InstRaw { version?: string; time?: number; poured_from_bottle?: boolean; installed_on_request?: boolean; }
 interface VersionsRaw { stable?: string; }

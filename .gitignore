@@ -12,3 +12,4 @@
 /.appanalyzer
 /dist
 /logs
+/entry/src/main/cpp/libs

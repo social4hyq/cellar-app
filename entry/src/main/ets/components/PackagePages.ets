@@ -64,6 +64,8 @@ struct PackageRow {
 @Component
 struct DetailPanel {
   @Prop p: LivePkg | undefined = undefined;
+  @Prop taskPhase: string = '';
+  onUninstall: (p: LivePkg) => void = () => {};
 
   @Builder
   MetaRow(label: string, value: string) {
@@ -140,10 +142,14 @@ struct DetailPanel {
                 .fontSize(F.caption2).fontColor(C.textSecondary)
                 .width('100%').padding({ left: L.sm, right: L.sm, top: 0, bottom: L.sm })
             }.width('100%').borderRadius(L.radiusMd).clip(true)
-            Text('Uninstall')
-              .fontSize(F.callout).fontColor(C.textTertiary)
+            Button(this.taskPhase === 'running' ? '卸载中…' : 'Uninstall')
+              .fontSize(F.callout)
+              .fontColor(this.taskPhase === 'running' ? C.textTertiary : Color.White)
+              .backgroundColor(this.taskPhase === 'running' ? C.surfaceRecessed : C.statusError)
               .padding({ left: L.lg, right: L.lg, top: L.xs, bottom: L.xs })
-              .borderRadius(L.radiusSm).backgroundColor(C.surfaceRecessed)
+              .borderRadius(L.radiusSm)
+              .enabled(this.taskPhase !== 'running')
+              .onClick(() => { if (this.p) this.onUninstall(this.p); })
           }.width('100%').alignItems(HorizontalAlign.Start)
         }
         .width('100%').padding(L.lg)
@@ -165,6 +171,8 @@ struct DetailPanel {
 @Component
 export struct InstalledPage {
   @Prop packages: LivePkg[] = [];
+  @Prop taskPhase: string = '';
+  onUninstall: (p: LivePkg) => void = () => {};
   @State selected: LivePkg | undefined = undefined;
   @State query: string = '';
   @State scope: string = 'All';
@@ -248,7 +256,7 @@ export struct InstalledPage {
         .layoutWeight(1).height('100%')
         .backgroundColor(C.surface)
 
-        DetailPanel({ p: this.selected })
+        DetailPanel({ p: this.selected, taskPhase: this.taskPhase, onUninstall: this.onUninstall })
           .width(L.inspectorWidth + 80)
       }
       .width('100%').layoutWeight(1)
@@ -262,6 +270,10 @@ export struct InstalledPage {
 @Component
 export struct UpgradesPage {
   @Prop packages: LivePkg[] = [];
+  @Prop taskPhase: string = '';
+  onUpgrade: (p: LivePkg) => void = () => {};
+  onUpgradeAll: () => void = () => {};
+  onCancel: () => void = () => {};
   @State selected: LivePkg | undefined = undefined;
   private outdated(): LivePkg[] { return this.packages.filter((p: LivePkg): boolean => p.outdated); }
 
@@ -278,8 +290,15 @@ export struct UpgradesPage {
           Column({ space: L.sm }) {
             Row({ space: 6 }) {
               Text('⬆').fontSize(14).fontColor(C.brandPrimary)
-              Text(this.outdated().length + ' outdated packages').fontSize(F.title2).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
-            }.width('100%').padding({ left: L.lg, top: L.md })
+              Text(this.outdated().length + ' outdated packages').fontSize(F.title2).fontWeight(FontWeight.Bold).fontColor(C.textPrimary).layoutWeight(1)
+              if (this.taskPhase === 'running') {
+                Button('取消').fontSize(F.caption).fontColor(C.statusError).backgroundColor(C.statusErrorSubtle)
+                  .height(26).onClick(() => { this.onCancel(); })
+              } else if (this.outdated().length > 0) {
+                Button('Upgrade All').fontSize(F.caption).fontColor(Color.White).backgroundColor(C.brandPrimary)
+                  .height(26).onClick(() => { this.onUpgradeAll(); })
+              }
+            }.width('100%').padding({ left: L.lg, right: L.lg, top: L.md })
             ForEach(this.outdated(), (p: LivePkg) => {
               Row({ space: L.sm }) {
                 Column({ space: 2 }) {
@@ -288,6 +307,10 @@ export struct UpgradesPage {
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                 Text(p.installedVersion + ' → ' + p.latestVersion).fontSize(F.caption).fontColor(C.brandPrimary)
                 TypeBadge({ p: p })
+                Button('Upgrade').fontSize(F.caption2).fontColor(Color.White).backgroundColor(C.brandPrimary)
+                  .height(24).padding({ left: 8, right: 8 })
+                  .enabled(this.taskPhase !== 'running')
+                  .onClick(() => { this.onUpgrade(p); })
               }.width('100%').padding({ left: L.md, right: L.md, top: L.sm, bottom: L.sm })
                .borderRadius(L.radiusMd).backgroundColor(this.selected?.name === p.name ? C.brandTint : Color.Transparent)
                .onClick(() => { this.selected = p; })

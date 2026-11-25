@@ -1,49 +1,61 @@
 // 其余页面：Services / Doctor / Configuration
 import { C, L, F } from '../theme/Tokens';
 import { DoctorResult, DoctorFinding, ConfigItem } from '../data/BrewRunner';
+import { HarborService } from '../data/HarborIpc';
 
-// ============ Services 页 ============
-interface SvcItem { name: string; status: string; running: boolean; user: string; }
-const SERVICES: SvcItem[] = [
-  { name: 'social4hyq/core/mihomo', status: 'started', running: true, user: 'currentUser' },
-  { name: 'social4hyq/core/sshd', status: 'stopped', running: false, user: 'currentUser' },
-  { name: 'social4hyq/core/herdr', status: 'stopped', running: false, user: 'currentUser' },
-];
-
+// ============ Services 页（由 Harbor HAP 托管，经回环 IPC 读真实状态）============
 @Component
 export struct ServicesPage {
-  @State selected: SvcItem | undefined = SERVICES[0];
+  @Prop services: HarborService[] = [];
+  @Prop loaded: boolean = false;
+  onRefresh: () => void = () => {};
+  @State selected: HarborService | undefined = undefined;
+
   build() {
     Column({ space: 0 }) {
       Column({ space: 4 }) {
-        Text('Services').fontSize(F.title3).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
-        Text('Homebrew services on this Mac').fontSize(F.caption).fontColor(C.textSecondary)
+        Row() {
+          Column() {
+            Text('Services').fontSize(F.title3).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
+            Text('Managed by Harbor · loopback IPC').fontSize(F.caption).fontColor(C.textSecondary)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+          Button('↻').fontSize(F.callout).fontColor(C.textBrand).backgroundColor(C.brandTint)
+            .width(28).height(28).onClick(() => { this.onRefresh(); })
+        }.width('100%')
       }.width('100%').padding({ left: L.lg, right: L.lg, top: L.md, bottom: L.md })
        .backgroundColor(C.surface).border({ width: { bottom: 1 }, color: C.borderSeparator })
       Row({ space: 0 }) {
         Scroll() {
           Column({ space: 2 }) {
-            ForEach(SERVICES, (s: SvcItem) => {
-              Row({ space: L.sm }) {
-                Circle({ width: 8, height: 8 }).fill(s.running ? C.statusSuccess : C.textTertiary)
-                Column({ space: 2 }) {
-                  Text(s.name).fontSize(F.body).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
-                  Text(s.status).fontSize(F.caption).fontColor(C.textSecondary)
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              }.width('100%').padding({ left: L.md, right: L.md, top: L.sm, bottom: L.sm })
-               .borderRadius(L.radiusMd).backgroundColor(this.selected?.name === s.name ? C.brandTint : Color.Transparent)
-               .onClick(() => { this.selected = s; })
-            })
+            if (!this.loaded) {
+              Text('连接 Harbor IPC…').fontSize(F.callout).fontColor(C.textTertiary).padding(L.md)
+            } else if (this.services.length === 0) {
+              Text('Harbor 未运行或无服务').fontSize(F.callout).fontColor(C.textTertiary).padding(L.md)
+            } else {
+              ForEach(this.services, (s: HarborService) => {
+                Row({ space: L.sm }) {
+                  Circle({ width: 8, height: 8 }).fill(s.status === 'started' ? C.statusSuccess : (s.status === 'disabled' ? C.textTertiary : C.statusWarning))
+                  Column({ space: 2 }) {
+                    Text(s.name).fontSize(F.body).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
+                    Text(s.status + (s.pid > 0 ? ' · PID ' + s.pid : '')).fontSize(F.caption).fontColor(C.textSecondary)
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                }.width('100%').padding({ left: L.md, right: L.md, top: L.sm, bottom: L.sm })
+                 .borderRadius(L.radiusMd).backgroundColor(this.selected?.name === s.name ? C.brandTint : Color.Transparent)
+                 .onClick(() => { this.selected = s; })
+              })
+            }
           }.width('100%').padding(L.sm)
         }.layoutWeight(1).height('100%').backgroundColor(C.surface)
         Column({ space: L.md }) {
           if (this.selected !== undefined) {
             Text(this.selected!.name).fontSize(F.title2).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
             Text('Status: ' + this.selected!.status).fontSize(F.callout).fontColor(C.textSecondary)
-            Text('User: ' + this.selected!.user).fontSize(F.callout).fontColor(C.textSecondary)
+            Text('PID: ' + (this.selected!.pid > 0 ? this.selected!.pid.toString() : '—')).fontSize(F.callout).fontColor(C.textSecondary)
             Divider().color(C.borderSeparator)
-            Text('Service control will be available when the native bridge is connected.')
+            Text('服务由 Harbor HAP 托管。用 `harbor start/stop/restart <name>` 管理。')
               .fontSize(F.callout).fontColor(C.textTertiary)
+          } else {
+            Text('Select a service').fontSize(F.callout).fontColor(C.textTertiary)
           }
         }.width(L.inspectorWidth + 80).height('100%').padding(L.lg)
          .backgroundColor(C.surfaceElevated).border({ width: { left: 1 }, color: C.borderSeparator })

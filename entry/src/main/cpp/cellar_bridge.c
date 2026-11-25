@@ -258,6 +258,23 @@ static napi_value KillPid(napi_env env, napi_callback_info info) {
   return ret;
 }
 
+/* killGroup(pgid, signal) -> number (0=ok, -1=err)
+ * 杀整个进程组：spawn 用 setsid 让孙进程成为 session/group leader（pgid==pid），
+ * 故传入 pidfile 里的 pid 即可 kill(-pid, sig)，连带 brew fork 的 curl/git 子进程。 */
+static napi_value KillGroup(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2];
+  napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+  if (argc < 2) { napi_throw_error(env, NULL, "killGroup needs (pgid, signal)"); return NULL; }
+  int32_t pgid = 0, sig = 15;
+  napi_get_value_int32(env, args[0], &pgid);
+  napi_get_value_int32(env, args[1], &sig);
+  int r = (pgid > 1) ? kill(-(pid_t)pgid, sig) : -1;
+  napi_value ret;
+  napi_create_int32(env, r, &ret);
+  return ret;
+}
+
 /* pidfileExists(pidfile) -> number (1=文件存在, 0=不存在) */
 static napi_value PidfileExists(napi_env env, napi_callback_info info) {
   size_t argc = 1;
@@ -347,6 +364,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "spawn", NULL, Spawn, NULL, NULL, NULL, napi_default, NULL },
     { "pidFromPidfile", NULL, PidFromPidfile, NULL, NULL, NULL, napi_default, NULL },
     { "killPid", NULL, KillPid, NULL, NULL, NULL, napi_default, NULL },
+    { "killGroup", NULL, KillGroup, NULL, NULL, NULL, napi_default, NULL },
     { "killAndWait", NULL, KillAndWait, NULL, NULL, NULL, napi_default, NULL },
     { "pidfileExists", NULL, PidfileExists, NULL, NULL, NULL, napi_default, NULL },
     { "cleanupPidfiles", NULL, CleanupPidfiles, NULL, NULL, NULL, napi_default, NULL }
