@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "Cellar"
+    },
+    {
+      "name": "module_desc",
+      "value": "Homebrew package manager for HarmonyOS"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Cellar - Homebrew GUI"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Cellar"
+    }
+  ]
+}
