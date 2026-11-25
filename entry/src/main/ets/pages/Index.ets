@@ -1,27 +1,36 @@
 import { C } from '../theme/Tokens';
-import { Sidebar, ConsolePanel, Page, NavItem, NAV_ITEMS } from '../components/Shell';
+import { Sidebar, ConsolePanel, Page } from '../components/Shell';
 import { InstalledPage, UpgradesPage, DiscoverPage } from '../components/PackagePages';
 import { ServicesPage, DoctorPage, ConfigurationPage } from '../components/OtherPages';
-import { PACKAGES } from '../data/PackagesData';
+import { start, isRunning, output, parseInfoJson, LivePkg } from '../data/BrewRunner';
 
 @Entry
 @Component
 struct Index {
   @State current: Page = Page.Installed;
-  @State consoleText: string =
-    '$ brew --version\n' +
-    'Homebrew 7.0.9_7\n' +
-    '$ brew info --installed --json=v2\n' +
-    '→ 313 formulae, 0 casks\n' +
-    '$ brew list --versions\n' +
-    '→ abseil 20260817.0_1, acl 2.4.0, ...\n' +
-    '$ brew outdated\n' +
-    '→ social4hyq/core/postman-app\n' +
-    '→ social4hyq/core/vite-plus\n';
+  @State packages: LivePkg[] = [];
+  @State loaded: boolean = false;
+  @State consoleText: string = '$ brew info --installed --json=v2\n→ 正在读取…';
+
+  aboutToAppear(): void {
+    // P1：在 HAP 内执行 brew info --installed --json=v2，读回并解析成实时包列表
+    start(['info', '--installed', '--json=v2'], 'info-all');
+    const timer = setInterval(() => {
+      if (isRunning('info-all')) return;
+      clearInterval(timer);
+      const out = output('info-all');
+      const pkgs = parseInfoJson(out);
+      if (pkgs.length > 0) {
+        this.packages = pkgs;
+        this.loaded = true;
+      }
+      this.consoleText = '$ brew info --installed --json=v2\n→ ' + pkgs.length + ' formulae loaded';
+    }, 500);
+  }
 
   private upgradeCount(): number {
     let n = 0;
-    for (const p of PACKAGES) if (p.outdated) n++;
+    for (const p of this.packages) if (p.outdated) n++;
     return n;
   }
 
@@ -31,14 +40,13 @@ struct Index {
         Sidebar({ current: this.current, upgradeCount: this.upgradeCount() })
 
         Column({ space: 0 }) {
-          // 功能页区域
           Column() {
             if (this.current === Page.Installed) {
-              InstalledPage()
+              InstalledPage({ packages: this.packages })
             } else if (this.current === Page.Upgrades) {
-              UpgradesPage()
+              UpgradesPage({ packages: this.packages })
             } else if (this.current === Page.Discover) {
-              DiscoverPage()
+              DiscoverPage({ packages: this.packages })
             } else if (this.current === Page.Services) {
               ServicesPage()
             } else if (this.current === Page.Doctor) {
@@ -49,7 +57,6 @@ struct Index {
           }
           .width('100%').layoutWeight(1)
 
-          // 底部 Console
           ConsolePanel({ consoleText: this.consoleText })
         }
         .layoutWeight(1).height('100%')

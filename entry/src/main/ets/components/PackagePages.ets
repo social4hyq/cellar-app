@@ -1,6 +1,6 @@
 // 包相关页面：Installed（三栏）、Upgrades、Discover
 import { C, L, F } from '../theme/Tokens';
-import { Pkg, PACKAGES } from '../data/PackagesData';
+import { LivePkg } from '../data/BrewRunner';
 
 // 时间戳（秒）-> "31 Oct 2024"
 function formatDate(ts: number): string {
@@ -11,7 +11,7 @@ function formatDate(ts: number): string {
 }
 
 // 类型徽章：FORMULA / CASK（本环境全 formula，保留视觉）
-interface BadgeParam { p: Pkg; }
+interface BadgeParam { p: LivePkg; }
 @Builder
 function TypeBadge(bp: BadgeParam) {
   Text('FORMULA')
@@ -31,9 +31,9 @@ function InstalledCheck() {
 // 包行（列表中间栏）
 @Component
 struct PackageRow {
-  @Prop p: Pkg;
+  @Prop p: LivePkg;
   @Prop selected: boolean = false;
-  onSelect: (p: Pkg) => void = () => {};
+  onSelect: (p: LivePkg) => void = () => {};
 
   build() {
     Row({ space: L.sm }) {
@@ -63,7 +63,7 @@ struct PackageRow {
 // 详情面板（右侧）
 @Component
 struct DetailPanel {
-  @Prop p: Pkg | undefined = undefined;
+  @Prop p: LivePkg | undefined = undefined;
 
   @Builder
   MetaRow(label: string, value: string) {
@@ -164,20 +164,21 @@ struct DetailPanel {
 // ============ Installed 页（三栏）============
 @Component
 export struct InstalledPage {
-  @State selected: Pkg | undefined = undefined;
+  @Prop packages: LivePkg[] = [];
+  @State selected: LivePkg | undefined = undefined;
   @State query: string = '';
   @State scope: string = 'All';
   @State hideDeps: boolean = false;
 
-  private filtered(): Pkg[] {
-    let list = PACKAGES.slice();
-    if (this.scope === 'Formulae') list = list.filter(p => !p.fullName.includes('cask'));
-    if (this.scope === 'Casks') list = list.filter(p => p.fullName.includes('cask'));
+  private filtered(): LivePkg[] {
+    let list = this.packages.slice();
+    if (this.scope === 'Formulae') list = list.filter((p: LivePkg): boolean => !p.fullName.includes('cask'));
+    if (this.scope === 'Casks') list = list.filter((p: LivePkg): boolean => p.fullName.includes('cask'));
     if (this.query.length > 0) {
       const q = this.query.toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q));
+      list = list.filter((p: LivePkg): boolean => p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q));
     }
-    if (this.hideDeps) list = list.filter(p => p.installedOnRequest);
+    if (this.hideDeps) list = list.filter((p: LivePkg): boolean => p.installedOnRequest);
     return list;
   }
 
@@ -207,7 +208,7 @@ export struct InstalledPage {
         Row() {
           Column() {
             Text('Your packages').fontSize(F.title1).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
-            Text(PACKAGES.length + ' packages').fontSize(F.callout).fontColor(C.textSecondary)
+            Text(this.packages.length + ' packages').fontSize(F.callout).fontColor(C.textSecondary)
           }.alignItems(HorizontalAlign.Start)
 
           Blank()
@@ -239,8 +240,8 @@ export struct InstalledPage {
       Row({ space: 0 }) {
         Scroll() {
           Column({ space: 2 }) {
-            ForEach(this.filtered(), (p: Pkg) => {
-              PackageRow({ p: p, selected: this.selected?.name === p.name, onSelect: (x: Pkg) => { this.selected = x; } })
+            ForEach(this.filtered(), (p: LivePkg) => {
+              PackageRow({ p: p, selected: this.selected?.name === p.name, onSelect: (x: LivePkg) => { this.selected = x; } })
             })
           }.width('100%').padding({ left: L.sm, right: L.sm, top: L.sm, bottom: L.sm })
         }
@@ -260,8 +261,9 @@ export struct InstalledPage {
 // ============ Upgrades 页 ============
 @Component
 export struct UpgradesPage {
-  @State selected: Pkg | undefined = undefined;
-  private outdated(): Pkg[] { return PACKAGES.filter(p => p.outdated); }
+  @Prop packages: LivePkg[] = [];
+  @State selected: LivePkg | undefined = undefined;
+  private outdated(): LivePkg[] { return this.packages.filter((p: LivePkg): boolean => p.outdated); }
 
   build() {
     Column({ space: 0 }) {
@@ -278,7 +280,7 @@ export struct UpgradesPage {
               Text('⬆').fontSize(14).fontColor(C.brandPrimary)
               Text(this.outdated().length + ' outdated packages').fontSize(F.title2).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
             }.width('100%').padding({ left: L.lg, top: L.md })
-            ForEach(this.outdated(), (p: Pkg) => {
+            ForEach(this.outdated(), (p: LivePkg) => {
               Row({ space: L.sm }) {
                 Column({ space: 2 }) {
                   Text(p.name).fontSize(F.body).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
@@ -301,14 +303,15 @@ export struct UpgradesPage {
 // ============ Discover 页（占位 + 本地数据）============
 @Component
 export struct DiscoverPage {
+  @Prop packages: LivePkg[] = [];
   @State query: string = '';
-  @State selected: Pkg | undefined = undefined;
-  private suggestions(): Pkg[] {
+  @State selected: LivePkg | undefined = undefined;
+  private suggestions(): LivePkg[] {
     // 模拟"目录"：取包名含查询词的前 60 个（第一阶段静态数据）
-    let list = PACKAGES.slice();
+    let list = this.packages.slice();
     if (this.query.length > 0) {
       const q = this.query.toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q));
+      list = list.filter((p: LivePkg): boolean => p.name.toLowerCase().includes(q));
     }
     return list.slice(0, 60);
   }
@@ -332,7 +335,7 @@ export struct DiscoverPage {
           Column({ space: 2 }) {
             Text(this.query.length > 0 ? (this.suggestions().length + ' results') : 'Popular / all formulae (local catalogue)')
               .fontSize(F.caption).fontColor(C.textTertiary).padding({ left: L.md, top: L.sm })
-            ForEach(this.suggestions(), (p: Pkg) => {
+            ForEach(this.suggestions(), (p: LivePkg) => {
               Row({ space: L.sm }) {
                 Text(p.name).fontSize(F.body).fontWeight(FontWeight.Bold).fontColor(C.textPrimary)
                 TypeBadge({ p: p })

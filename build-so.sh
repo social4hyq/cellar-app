@@ -4,7 +4,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LLVM="$HOME/.harmonybrew/opt/ohos-sdk/native/llvm/bin"
 SYS="$HOME/.harmonybrew/opt/ohos-sdk-native/sysroot"
-SRC="$HERE/entry/src/main/cpp/harbor_bridge.c"
+SRC="$HERE/entry/src/main/cpp/cellar_bridge.c"
 OUT="$HERE/entry/src/main/cpp/libs/arm64-v8a"
 mkdir -p "$OUT"
 
