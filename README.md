@@ -20,15 +20,20 @@
 3. 干净 env 注入 HOME/PATH/TMPDIR/HOMEBREW_TEMP，关闭 auto-update/color/analytics
 4. 输出重定向到沙箱日志，UI 异步轮询 pidfile + 读回解析
 
-已接实时数据的页面：
+全部 6 页已接实时数据：
 - ✅ Installed / Upgrades / Discover（brew info --installed --json=v2，280 formulae）
 - ✅ Doctor（brew doctor --json，6 findings）
 - ✅ Configuration（brew config，31 items）
+- ✅ Services（**Harbor 回环 IPC**，读 Harbor HAP 托管的真实服务状态；Harmonybrew 的 `brew services` 在鸿蒙无实现，故改走 Harbor）
+
+写命令（install/uninstall/upgrade）：
+- ✅ 通过 native 桥执行，shell 包装捕获退出码（`.exit` 文件），stdin 接 /dev/null 避免交互卡死
+- ✅ 取消用 `killGroup(pgid, sig)` 杀整个进程组（brew 的 curl/git 子进程一并回收）
+- ✅ 完成后自动刷新包数据，Console 实时 tail 日志
 
 未实现（后续阶段）：
-- **Services 页**：Harmonybrew 的 `brew services` 无真实实现（依赖 macOS launchctl / Linux systemctl，鸿蒙都没有），需改接 Harbor IPC 拿真实服务状态
-- brew 写命令（install/uninstall/upgrade）——需 native job 生命周期层（stdin/退出码/进程组取消）
-- Console streaming 输出
+- Console 富文本渲染（当前纯文本 tail）/ streaming push（当前轮询）
+- Discover 未接远端 formulae.brew.sh API（用本地 4664 formula 目录）
 
 ## 构建与安装
 
